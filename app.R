@@ -12,54 +12,54 @@ library(bcmaps)
 library(data.table)
 library(DT)
 
-# LOAD TIME #### 
+# LOAD TIME ####
 
   today <- as.Date(Sys.Date())
   year <- substr(today,0,4)
-  
+
 # LOAD NRD ####
-  
+
 # nrd <- bcmaps::nr_districts() %>%
 #   mutate(ORG_UNIT_NAME = gsub(" Natural Resource District", "",ORG_UNIT_NAME)) %>%
-#   select(ORG_UNIT_NAME) %>% 
+#   select(ORG_UNIT_NAME) %>%
 #   mutate(n = row_number())  %>%
 #   st_transform(4326)
 # saveRDS(nrd, "nrd.rds")
 nrd <- readRDS("nrd.rds")
-  
-# LOAD STATIONS #### 
+
+# LOAD STATIONS ####
 
 # stn <- readr::read_csv("https://www.for.gov.bc.ca/ftp/HPR/external/!publish/BCWS_DATA_MART/2022/2022_BCWS_WX_STATIONS.csv", id = "file_name") %>%
 #   st_as_sf(coords = c("LONGITUDE","LATITUDE"), crs = 4326) %>% st_intersection(nrd %>% select(-n))
 # saveRDS(stn, "stn.rds")
 stn <- readRDS("stn.rds")
-  
+
 stn_name <- stn %>% st_drop_geometry() %>% select(STATION_CODE, STATION_NAME)
 ids <- sort(unique(stn$STATION_NAME))
 
 # LOAD WX DATA ####
-  
+
   get_bcws_data <- function(y, dates){
-    
+
     url <- paste0("https://www.for.gov.bc.ca/ftp/HPR/external/!publish/BCWS_DATA_MART/",y,"/") # url <- "ftp://ftp.for.gov.bc.ca/HPR/external/!publish/BCWS_DATA_MART/2022/"
     list_csv_files <- paste0(url, dates,".csv")
-    
+
     df <- bind_rows(lapply(list_csv_files, function(file){
       t <- tempfile(fileext = ".csv")
       curl::curl_download(file, destfile = t)
-      read.csv(t) })) %>% 
-      as_tibble() %>% 
+      read.csv(t) })) %>%
+      as_tibble() %>%
       mutate(DATE_TIME = as_datetime(paste0(substr(DATE_TIME,1,4),"-",
                                             substr(DATE_TIME,5,6),"-",
                                             substr(DATE_TIME,7,8)," ",
-                                            substr(DATE_TIME,9,10),":00:00"))+1*60*60) %>% 
+                                            substr(DATE_TIME,9,10),":00:00"))+1*60*60) %>%
       mutate(date = as.Date(DATE_TIME, format = "%Y%m%d"),
              time = substr(DATE_TIME, 12,13),
-             datetime = DATE_TIME) %>% 
+             datetime = DATE_TIME) %>%
       filter(!is.na(DATE_TIME))
-    
+
   }
-  
+
   # dates <- seq(as.Date("2023-01-01"), as.Date("2023-10-01"), "1 day")
   # hist <- get_bcws_data(year, dates)
   # saveRDS(hist, "hist.rds")
@@ -68,23 +68,13 @@ ids <- sort(unique(stn$STATION_NAME))
   cur <- get_bcws_data(year, dates)
   df <- bind_rows(hist,cur)
   rm(hist, cur)
-  
-  stn %>% filter(STATION_NAME == "BENSON")
-  library(ggplot2)
-  library(plotly)
-  plotly::ggplotly(
-  hist %>% 
-    filter(STATION_CODE == 228) %>% 
-    group_by(date) %>% 
-    summarize(PRECIPITATION = sum(PRECIPITATION)) %>% 
-    ggplot() + geom_line(aes(date, PRECIPITATION)), dynamicTicks = T)
-  
+
 # LOAD COLORS ####
-  
+
   mycolors <- rep(c("#4E79A7","#A0CBE8","#F28E2B","#FFBE7D","#59A14F","#8CD17D","#B6992D",
                 "#F1CE63","#499894","#86BCB6","#E15759","#FF9D9A","#79706E","#BAB0AC",
                 "#D37295","#FABFD2","#B07AA1","#D4A6C8","#9D7660","#D7B5A6"), 100)
-  
+
 # UI ####
 
 ui <- navbarPage("BCWS WX",
@@ -150,7 +140,7 @@ ui <- navbarPage("BCWS WX",
                           choices=c("mean","max","min","sum"),
                           selected = "sum"),
                         dateRangeInput(
-                          min = paste0(year,"-01-01"), 
+                          min = paste0(year,"-01-01"),
                           max = today,
                           "datesID",
                           label = "Date range:",
@@ -163,7 +153,7 @@ ui <- navbarPage("BCWS WX",
                         rbokehOutput("distPlot"),
                         rbokehOutput("rollingPlot"),
                         p(),strong("Most Recent Total Precipitation (Rainfall Intensity):"),
-                        DT::dataTableOutput("shutdownOutput"),                        
+                        DT::dataTableOutput("shutdownOutput"),
                         downloadButton("downloadData", paste("Download Hourly CSV")),
                         p(),strong("Source:"),em(paste0("https://www.for.gov.bc.ca/ftp/HPR/external/!publish/BCWS_DATA_MART/",year,"/")),
                         p("Data comes with no guarantees of quality or reliability. Use at your own risk.")
@@ -174,9 +164,9 @@ ui <- navbarPage("BCWS WX",
     )
 
 server <- function(input, output, session) {
-  
+
   source("prep.R")
-  
+
   output$distPlot <- renderRbokeh({
 
     df_sub <- df %>%
@@ -191,7 +181,7 @@ server <- function(input, output, session) {
     df_sub$color <- mycolors[match(df_sub$STATION_NAME, input$siteID)]
 
     if(nrow(df_sub)>=1){
-      figure(title = paste("Hourly Data (most recent:", max(df_sub$datetime),")"), 
+      figure(title = paste("Hourly Data (most recent:", max(df_sub$datetime),")"),
              width = 1400, height = 600,
              legend_location = NULL,
              tools = c("pan", "wheel_zoom", "box_zoom", "reset", "save")) %>%
@@ -204,7 +194,7 @@ server <- function(input, output, session) {
         y_axis(paste(input$variableID))}
   })
 
-  
+
   output$rollingPlot <- renderRbokeh({
 
     hours <- tibble(id = c("1 hour", "12 hours", "1 day (24h)", "2 days (48h)", "3 days (72h)"),
@@ -249,20 +239,20 @@ server <- function(input, output, session) {
         y_axis(paste(input$variableID))}
 
   })
-   
-  
-  # TABLE 
-  
-  
+
+
+  # TABLE
+
+
   output$shutdownOutput <- DT::renderDataTable({
-    
+
     df_sub <- df %>%
       filter(STATION_NAME %in% input$siteID) %>%
       rename(var = "HOURLY_PRECIPITATION") %>%
-      select(STATION_NAME, datetime, var) %>% 
-      filter(!is.na(var)) %>% 
+      select(STATION_NAME, datetime, var) %>%
+      filter(!is.na(var)) %>%
       filter(!is.na(datetime))
-    
+
     temp <- df_sub %>%
       arrange(datetime) %>%
       group_by(STATION_NAME) %>%
@@ -270,30 +260,30 @@ server <- function(input, output, session) {
       mutate(sum12 = round(roll_sum(var, 12, align = "right", fill = NA, na.rm = T),2),
              sum24 = round(roll_sum(var, 24, align = "right", fill = NA, na.rm = T),2),
              sum48 = round(roll_sum(var, 48, align = "right", fill = NA, na.rm = T),2),
-             sum72 = round(roll_sum(var, 72, align = "right", fill = NA, na.rm = T),2)) %>% 
-      filter(datetime == max(datetime)) %>% 
+             sum72 = round(roll_sum(var, 72, align = "right", fill = NA, na.rm = T),2)) %>%
+      filter(datetime == max(datetime)) %>%
       select(-var)
-    
+
     DT::datatable(temp, colnames = c("Station", "Date/Time (PDT)", "12hr", "24hr","48hr","72hr"))
   })
-      
-  
+
+
   # STN MAP
   output$mapStns <- renderLeaflet({
-    
+
     stn_map <- stn %>%
       filter(STATION_NAME %in% ids) %>%
       mutate(group = case_when(STATION_NAME %in% input$siteID ~ "selected",
                                TRUE ~ ""))
-    
+
     stn_map_selected <- select(stn_map, c("STATION_NAME","group", "ELEVATION_M")) %>%
       filter(group == "selected")
-    
+
     stn_map_not <- select(stn_map, c("STATION_NAME","group", "ELEVATION_M")) %>%
       filter(group == "")
 
     stn_map_selected$STATION_NAME <- factor(stn_map_selected$STATION_NAME, levels = input$siteID, ordered = T)
-    
+
     if(nrow(stn_map_selected)>=1){
       tmap_leaflet(
         tm_shape(nrd, bbox = stn_map_selected %>% st_buffer(50000) %>% st_bbox()) +
@@ -310,7 +300,7 @@ server <- function(input, output, session) {
           }
 
   })
-  
+
   output$downloadData <- downloadHandler(
 
     filename = function() {
@@ -330,8 +320,8 @@ server <- function(input, output, session) {
                 file, row.names = FALSE)
     }
   )
-  
-  
+
+
   # CLICK ON MAP TO ADD/REMOVE SITES
   observeEvent(input$mapStns_shape_click, {
     p <- input$mapStns_shape_click  # typo was on this line
@@ -344,9 +334,9 @@ server <- function(input, output, session) {
   })
 
   observeEvent(input$nrdID, {
-  
+
     if(length(input$nrdID)>0){
-      
+
       nrd_stn <- stn %>% filter(ORG_UNIT_NAME %in% input$nrdID)#[stn %>% st_intersects(nrd %>% filter(ORG_UNIT_NAME %in% input$nrdID) %>% summarize(), sparse = F),]
       # nrd_stn <- stn[stn %>% st_intersects(nrd[1,], sparse = F),]
 
@@ -354,7 +344,7 @@ server <- function(input, output, session) {
   })
 
   # stn[stn %>% st_intersects(nrd %>% filter(ORG_UNIT_NAME %in% c("Peace","Campbell River")) %>% summarize, sparse = F),] %>% mapview::mapview()
-  
+
 }
 
 shinyApp(ui = ui, server = server)

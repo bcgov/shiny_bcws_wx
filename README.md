@@ -5,29 +5,12 @@ See <https://github.com/BCDevExchange/Our-Project-Docs/blob/master/discussion/pr
 If you have bcgovr installed and you use RStudio, click the 'Insert BCDevex Badge' Addin.
 -->
 
-shiny_bcws_wx
+British Columbia Rainfall Intensity ShinyApp
 ============================
 
-### Usage
+### App
 
-Describe data being used (links), and how to run. Eg:
-
-There are four core scripts that are required for the analysis, they need to be run in order:
-
--   01\_clean.R
--   02\_analysis.R
--   03\_visualize.R
--   04\_output.R
-
-#### Example
-
-This is a basic example which shows you how to solve a common problem:
-
-``` r
-## basic example code
-```
-
-### Project Status
+https://bcgov-env.shinyapps.io/bcws_wx/
 
 ### Getting Help or Reporting an Issue
 
